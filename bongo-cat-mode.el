@@ -47,25 +47,40 @@
   (file-name-directory (or load-file-name buffer-file-name))
   "Directory containing bongo-cat-mode assets.")
 
-(defconst bongo-cat-mode--image-files
-  ["bongo-cat-idle.png"
-   "bongo-cat-type-1.png"
-   "bongo-cat-type-2.png"]
-  "PNG files used for idle and typing frames.")
+(defconst bongo-cat-mode--frame-names
+  ["idle" "type-1" "type-2"]
+  "Names used for idle and typing frame image files.")
 
 (defgroup bongo-cat nil
   "Bongo Cat in the mode-line."
   :group 'mode-line
   :prefix "bongo-cat-")
 
-(defcustom bongo-cat-height 24
+(defun bongo-cat-mode-clear-cache ()
+  "Clear cached Bongo Cat image specs and rendered images."
+  (interactive)
+  (when (boundp 'bongo-cat-mode--image-cache)
+    (setq bongo-cat-mode--image-cache nil))
+  (when (fboundp 'clear-image-cache)
+    (ignore-errors
+      (clear-image-cache)))
+  (force-mode-line-update t))
+
+(defcustom bongo-cat-height 28
   "Height of the Bongo Cat image in pixels."
   :type 'natnum
   :set (lambda (sym val)
          (set-default sym val)
-         (when (boundp 'bongo-cat-mode--image-cache)
-           (setq bongo-cat-mode--image-cache nil))
-         (force-mode-line-update t))
+         (bongo-cat-mode-clear-cache))
+  :group 'bongo-cat)
+
+(defcustom bongo-cat-color-scheme 'white
+  "Color scheme used for Bongo Cat image frames."
+  :type '(choice (const :tag "White cat" white)
+                 (const :tag "Black cat" black))
+  :set (lambda (sym val)
+         (set-default sym val)
+         (bongo-cat-mode-clear-cache))
   :group 'bongo-cat)
 
 (defcustom bongo-cat-animation-frame-interval 0.12
@@ -84,7 +99,7 @@
   :group 'bongo-cat)
 
 (defvar bongo-cat-mode--image-cache nil
-  "Cached Bongo Cat image specs.")
+  "Cached Bongo Cat image specs keyed by color scheme and height.")
 
 (defvar bongo-cat-mode--animation-timer nil
   "Timer used while Bongo Cat is typing.")
@@ -106,9 +121,15 @@
   "Return non-nil when PNG images can be created."
   (image-type-available-p 'png))
 
+(defun bongo-cat-mode--image-file (index)
+  "Return image file name for frame INDEX."
+  (format "bongo-cat-%s-%s.png"
+          bongo-cat-color-scheme
+          (aref bongo-cat-mode--frame-names index)))
+
 (defun bongo-cat-mode--image-path (index)
   "Return image path for frame INDEX."
-  (let* ((file (aref bongo-cat-mode--image-files index))
+  (let* ((file (bongo-cat-mode--image-file index))
          (candidates (list (expand-file-name file bongo-cat-mode-directory)
                            (expand-file-name file
                                              (expand-file-name "img"
@@ -128,9 +149,13 @@
 (defun bongo-cat-mode--images ()
   "Return cached vector of Bongo Cat images."
   (when (bongo-cat-mode--image-supported-p)
-    (or bongo-cat-mode--image-cache
-        (setq bongo-cat-mode--image-cache
-              (vconcat (mapcar #'bongo-cat-mode--create-image '(0 1 2)))))))
+    (let ((key (list bongo-cat-color-scheme bongo-cat-height)))
+      (if (equal (car-safe bongo-cat-mode--image-cache) key)
+          (cdr bongo-cat-mode--image-cache)
+        (cdr (setq bongo-cat-mode--image-cache
+                   (cons key
+                         (vconcat (mapcar #'bongo-cat-mode--create-image
+                                          '(0 1 2))))))))))
 
 (defun bongo-cat-mode--current-frame ()
   "Return current Bongo Cat frame index."
@@ -224,6 +249,7 @@
   :group 'bongo-cat
   (if bongo-cat-mode
       (progn
+        (bongo-cat-mode-clear-cache)
         (bongo-cat-mode--install-mode-line)
         (add-hook 'post-self-insert-hook
                   #'bongo-cat-mode--post-self-insert))

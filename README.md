@@ -48,16 +48,38 @@ Enable it from your config:
 
 ## Customization
 
-Use the white image set:
+Choose a color scheme by setting `bongo-cat-color-scheme` before enabling the
+mode.
 
 ```elisp
 (setq bongo-cat-color-scheme 'white)
 ```
 
-Use the original color image set:
+Available schemes:
 
 ```elisp
-(setq bongo-cat-color-scheme 'color)
+(setq bongo-cat-color-scheme 'white) ; white cat, black lines
+(setq bongo-cat-color-scheme 'black) ; black cat, colored lines
+```
+
+If changing the scheme in a running Emacs session, refresh cached images:
+
+```elisp
+(setq bongo-cat-color-scheme 'white)
+(bongo-cat-mode-clear-cache)
+(force-mode-line-update t)
+```
+
+Doom example:
+
+```elisp
+(use-package! bongo-cat-mode
+  :init
+  (setq bongo-cat-color-scheme 'white
+        bongo-cat-height 28)
+  :config
+  (bongo-cat-mode-clear-cache)
+  (bongo-cat-mode 1))
 ```
 
 Options:
