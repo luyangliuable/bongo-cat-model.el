@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        emacs_version:
+          - "27.1"
+          - "28.2"
+          - "29.4"
+    steps:
+      - name: Set up Emacs
+        uses: purcell/setup-emacs@master
+        with:
+          version: ${{ matrix.emacs_version }}
+
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Byte-compile
+        run: make compile
+
+      - name: Checkdoc
+        run: make checkdoc
+
+      - name: package-lint
+        run: make package-lint
+
+      - name: Run tests
+        run: make test

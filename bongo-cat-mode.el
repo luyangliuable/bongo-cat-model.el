@@ -2,12 +2,12 @@
 
 ;; Copyright (C) 2026 Luyang Liu
 
-;; Author: Luyang Liu
-;; Maintainer: Luyang Liu
+;; Author: Luyang Liu <luyang.l@aol.com>
+;; Maintainer: Luyang Liu <luyang.l@aol.com>
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: convenience, games, multimedia
-;; URL: https://github.com/luyangliu/bongo-cat-mode
+;; URL: https://github.com/luyangliuable/bongo-cat-model.el
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; This file is not part of GNU Emacs.
@@ -43,6 +43,8 @@
 
 (require 'seq)
 
+;;;; Constants
+
 (defconst bongo-cat-mode-directory
   (file-name-directory (or load-file-name buffer-file-name))
   "Directory containing bongo-cat-mode assets.")
@@ -50,6 +52,8 @@
 (defconst bongo-cat-mode--frame-names
   ["idle" "type-1" "type-2"]
   "Names used for idle and typing frame image files.")
+
+;;;; Customization
 
 (defgroup bongo-cat nil
   "Bongo Cat in the mode-line."
@@ -140,15 +144,22 @@ the cat's body in your font."
   :type 'float
   :group 'bongo-cat)
 
+;;;; Internal state
+
+;; Forward declarations for the minor-mode variables, which are
+;; referenced by helpers defined before the modes themselves.
+(defvar bongo-cat-mode)
+(defvar bongo-cat-scroll-mode)
+
 (defvar bongo-cat-mode--image-cache nil
   "Alist of cached Bongo Cat image vectors.
 Each entry is (KEY . IMAGES) where KEY is
-(COLOR-SCHEME HEIGHT VARIANT).")
+\(COLOR-SCHEME HEIGHT VARIANT).")
 
 (defvar bongo-cat-mode--rail-cache nil
   "Alist of cached scroll-track rail-tile images.
 Each entry is (KEY . IMAGE) where KEY is
-(COLOR-SCHEME HEIGHT BASELINE KIND).")
+\(COLOR-SCHEME HEIGHT BASELINE KIND).")
 
 (defvar bongo-cat-mode--animation-timer nil
   "Timer used while Bongo Cat is typing.")
@@ -165,6 +176,8 @@ Each entry is (KEY . IMAGE) where KEY is
 (defconst bongo-cat-mode--mode-line-form
   '(:eval (bongo-cat-mode-format))
   "Mode-line form installed by `bongo-cat-mode'.")
+
+;;;; Images and rail tiles
 
 (defun bongo-cat-mode--image-supported-p ()
   "Return non-nil when PNG images can be created."
@@ -265,6 +278,8 @@ aligned so its line sits on the same track baseline as the cat."
                 'help-echo "Bongo Cat types when you type.")))
 
 
+;;;; Animation and typing
+
 (defun bongo-cat-mode--timer-live-p (timer)
   "Return non-nil when TIMER is live."
   (and (timerp timer) timer))
@@ -314,6 +329,8 @@ aligned so its line sits on the same track baseline as the cat."
   (bongo-cat-mode--schedule-idle)
   (force-mode-line-update t))
 
+;;;; Mode-line plumbing
+
 (defun bongo-cat-mode--install-mode-line (form)
   "Install FORM into `global-mode-string'."
   (unless (member form global-mode-string)
@@ -336,6 +353,8 @@ aligned so its line sits on the same track baseline as the cat."
     (remove-hook 'post-self-insert-hook
                  #'bongo-cat-mode--post-self-insert)))
 
+;;;; bongo-cat-mode
+
 ;;;###autoload
 (define-minor-mode bongo-cat-mode
   "Display a typing Bongo Cat in the mode-line."
@@ -354,6 +373,8 @@ aligned so its line sits on the same track baseline as the cat."
       (setq bongo-cat-mode--idle-timer nil))
     (bongo-cat-mode--become-idle))
   (force-mode-line-update t))
+
+;;;; bongo-cat-scroll-mode
 
 (defvar bongo-cat-scroll-mode nil)
 

@@ -1,5 +1,8 @@
 # bongo-cat-mode
 
+[![CI](https://github.com/luyangliuable/bongo-cat-model.el/actions/workflows/ci.yml/badge.svg)](https://github.com/luyangliuable/bongo-cat-model.el/actions/workflows/ci.yml)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+
 Bongo Cat types in your Emacs mode-line.
 
 This package displays the CodingCat artwork in the mode-line with the laptop and
@@ -28,37 +31,47 @@ Enable whichever you prefer:
 
 The two modes are alternatives; enable one at a time.
 
-The artwork is adapted from the local CodingCat component at:
-
-```text
-/Users/liul31/personal-portfolio-next/src/components/CodingCat/
-```
+The artwork is adapted from the "Coding Cat" design and redrawn for the
+mode-line (laptop and headphones removed).
 
 ## Installation
 
-### Doom Emacs local package
+The package ships the artwork in the `img/` directory, so make sure those
+assets are installed alongside the Elisp file.
+
+### straight.el / use-package
+
+```elisp
+(use-package bongo-cat-mode
+  :straight (bongo-cat-mode
+             :host github
+             :repo "luyangliuable/bongo-cat-model.el"
+             :files ("bongo-cat-mode.el" "img"))
+  :config
+  (bongo-cat-mode 1))
+```
+
+### Doom Emacs
 
 Add this to `packages.el`:
 
 ```elisp
 (package! bongo-cat-mode
-  :recipe (:local-repo "~/bongo-cat-mode"
+  :recipe (:host github
+           :repo "luyangliuable/bongo-cat-model.el"
            :files ("bongo-cat-mode.el" "img")))
 ```
 
-Then run:
-
-```sh
-doom sync
-```
-
-Enable it from your config:
+Then run `doom sync` and enable it from your config:
 
 ```elisp
 (use-package! bongo-cat-mode
   :config
   (bongo-cat-mode 1))
 ```
+
+For local development, point the recipe at a local checkout instead
+(`:local-repo "~/path/to/bongo-cat-model.el"`).
 
 ### Vanilla Emacs
 
@@ -131,6 +144,11 @@ images are unavailable it falls back to box-drawing characters, controlled by:
 - `bongo-cat-track-face` - fallback face for the rail (default `shadow`)
 - `bongo-cat-track-raise` - fallback vertical nudge for the rail characters
   (default `0.0`)
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for how to
+run the tests and linters locally.
 
 ## License
 

@@ -1,2 +1,4 @@
 *.elc
 *.sos
+/.eldev/
+*-autoloads.el
