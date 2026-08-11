@@ -126,12 +126,14 @@ as you move through the buffer."
   :type 'face
   :group 'bongo-cat)
 
-(defcustom bongo-cat-track-baseline 0.5
-  "Fraction of the flat cat image above its body-bottom line.
-The flat cat image is padded so its body-underside (table) line is at
-the vertical center, so the default of 0.5 puts the track rail on that
-line with the paws hanging below."
-  :type 'float
+(defcustom bongo-cat-track-baseline 'center
+  "Vertical placement of the flat cat and rail in the mode-line.
+Either the symbol `center' (the default, which auto-centers the image
+on the mode-line so it sits flush in the middle) or a float in
+\[0.0, 1.0] giving the baseline position as a fraction from the top of
+the image, for manual fine-tuning."
+  :type '(choice (const :tag "Auto-center" center)
+                 (float :tag "Fraction from top"))
   :set (lambda (sym val)
          (set-default sym val)
          (bongo-cat-mode-clear-cache))
@@ -183,6 +185,14 @@ Each entry is (KEY . IMAGE) where KEY is
   "Return non-nil when PNG images can be created."
   (image-type-available-p 'png))
 
+(defun bongo-cat-mode--ascent ()
+  "Return the `:ascent' value for flat cat and rail images.
+Honors `bongo-cat-track-baseline': a float is converted to a percentage,
+otherwise the image is auto-centered on the mode-line."
+  (if (floatp bongo-cat-track-baseline)
+      (max 0 (min 100 (round (* 100 bongo-cat-track-baseline))))
+    'center))
+
 (defun bongo-cat-mode--image-file (index &optional variant)
   "Return image file name for frame INDEX.
 VARIANT is `angled' (default) or `flat'."
@@ -220,10 +230,9 @@ aligned so its line sits on the same track baseline as the cat."
         (let* ((file (bongo-cat-mode--asset-path
                       (format "bongo-cat-%s-rail-%s.png"
                               bongo-cat-color-scheme kind)))
-               (ascent (max 0 (min 100 (round (* 100 bongo-cat-track-baseline)))))
                (image (and (file-readable-p file)
                            (create-image file 'png nil
-                                         :ascent ascent
+                                         :ascent (bongo-cat-mode--ascent)
                                          :height bongo-cat-height))))
           (push (cons key image) bongo-cat-mode--rail-cache)
           image)))))
@@ -232,7 +241,7 @@ aligned so its line sits on the same track baseline as the cat."
   "Create image spec for frame INDEX and VARIANT."
   (let ((file (bongo-cat-mode--image-path index variant))
         (ascent (if (eq variant 'flat)
-                    (max 0 (min 100 (round (* 100 bongo-cat-track-baseline))))
+                    (bongo-cat-mode--ascent)
                   'center)))
     (when (and (file-readable-p file)
                (bongo-cat-mode--image-supported-p))
