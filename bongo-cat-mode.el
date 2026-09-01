@@ -41,6 +41,7 @@
 
 ;;; Code:
 
+(require 'color)
 (require 'seq)
 
 ;;;; Constants
@@ -80,9 +81,12 @@
          (bongo-cat-mode-clear-cache))
   :group 'bongo-cat)
 
-(defcustom bongo-cat-color-scheme 'white
-  "Color scheme used for Bongo Cat image frames."
-  :type '(choice (const :tag "White cat" white)
+(defcustom bongo-cat-color-scheme 'auto
+  "Color scheme used for Bongo Cat image frames.
+With `auto', choose white artwork for light mode-lines and black artwork
+for dark mode-lines."
+  :type '(choice (const :tag "Match mode-line" auto)
+                 (const :tag "White cat" white)
                  (const :tag "Black cat" black))
   :set (lambda (sym val)
          (set-default sym val)
@@ -175,6 +179,9 @@ Each entry is (KEY . IMAGE) where KEY is
 (defvar bongo-cat-mode--typing-p nil
   "Non-nil while recent typing should animate Bongo Cat.")
 
+(defvar bongo-cat-mode--typing-window nil
+  "Window whose Bongo Cat is currently animating.")
+
 (defconst bongo-cat-mode--mode-line-form
   '(:eval (bongo-cat-mode-format))
   "Mode-line form installed by `bongo-cat-mode'.")
@@ -193,16 +200,46 @@ otherwise the image is auto-centered on the mode-line."
       (max 0 (min 100 (round (* 100 bongo-cat-track-baseline))))
     'center))
 
-(defun bongo-cat-mode--image-file (index &optional variant)
-  "Return image file name for frame INDEX.
-VARIANT is `angled' (default) or `flat'."
-  (if (eq variant 'flat)
-      (format "bongo-cat-%s-flat-%s.png"
-              bongo-cat-color-scheme
-              (aref bongo-cat-mode--frame-names index))
-    (format "bongo-cat-%s-%s.png"
-            bongo-cat-color-scheme
-            (aref bongo-cat-mode--frame-names index))))
+(defun bongo-cat-mode--mode-line-window-selected-p ()
+  "Return non-nil when rendering the selected window's mode-line.
+Fall back to a best-effort buffer-window check on Emacs versions that do not
+expose `mode-line-window-selected-p'."
+  (if (fboundp 'mode-line-window-selected-p)
+      (mode-line-window-selected-p)
+    (eq (selected-window) (get-buffer-window (current-buffer)))))
+
+(defun bongo-cat-mode--mode-line-frame ()
+  "Return the frame used for mode-line face lookup."
+  (window-frame (selected-window)))
+
+(defun bongo-cat-mode--effective-color-scheme ()
+  "Return the Bongo Cat scheme appropriate for the current mode-line."
+  (if (not (eq bongo-cat-color-scheme 'auto))
+      bongo-cat-color-scheme
+    (let* ((frame (bongo-cat-mode--mode-line-frame))
+           (face (if (bongo-cat-mode--mode-line-window-selected-p)
+                     'mode-line
+                   'mode-line-inactive))
+           (background (face-background face frame 'default))
+           (rgb (and background (color-values background))))
+      (if (if rgb
+              (color-dark-p (mapcar (lambda (component)
+                                      (/ component 65535.0))
+                                    rgb))
+            (eq (frame-parameter frame 'background-mode) 'dark))
+          'black
+        'white))))
+
+(defun bongo-cat-mode--image-file (index &optional variant scheme)
+  "Return image file name for frame INDEX, VARIANT, and SCHEME.
+VARIANT is `angled' (default) or `flat'.  SCHEME defaults to the effective
+mode-line color scheme."
+  (let ((scheme (or scheme (bongo-cat-mode--effective-color-scheme))))
+    (if (eq variant 'flat)
+        (format "bongo-cat-%s-flat-%s.png"
+                scheme (aref bongo-cat-mode--frame-names index))
+      (format "bongo-cat-%s-%s.png"
+              scheme (aref bongo-cat-mode--frame-names index)))))
 
 (defun bongo-cat-mode--asset-path (file)
   "Return a readable path for asset FILE, searching the package dirs."
@@ -213,23 +250,22 @@ VARIANT is `angled' (default) or `flat'."
     (or (seq-find #'file-readable-p candidates)
         (car candidates))))
 
-(defun bongo-cat-mode--image-path (index &optional variant)
-  "Return image path for frame INDEX and VARIANT."
-  (bongo-cat-mode--asset-path (bongo-cat-mode--image-file index variant)))
+(defun bongo-cat-mode--image-path (index &optional variant scheme)
+  "Return image path for frame INDEX, VARIANT, and SCHEME."
+  (bongo-cat-mode--asset-path (bongo-cat-mode--image-file index variant scheme)))
 
-(defun bongo-cat-mode--rail-image (kind)
-  "Return a cached rail-tile image for KIND (`solid' or `faint').
-The tile matches the flat cat's border color and thickness and is
-aligned so its line sits on the same track baseline as the cat."
+(defun bongo-cat-mode--rail-image (kind &optional scheme)
+  "Return a cached rail-tile image for KIND using SCHEME.
+KIND is `solid' or `faint'.  The tile matches the flat cat's border color and
+thickness and is aligned so its line sits on the same track baseline as the cat."
   (when (bongo-cat-mode--image-supported-p)
-    (let* ((key (list bongo-cat-color-scheme bongo-cat-height
-                      bongo-cat-track-baseline kind))
+    (let* ((scheme (or scheme (bongo-cat-mode--effective-color-scheme)))
+           (key (list scheme bongo-cat-height bongo-cat-track-baseline kind))
            (cached (assoc key bongo-cat-mode--rail-cache)))
       (if cached
           (cdr cached)
         (let* ((file (bongo-cat-mode--asset-path
-                      (format "bongo-cat-%s-rail-%s.png"
-                              bongo-cat-color-scheme kind)))
+                      (format "bongo-cat-%s-rail-%s.png" scheme kind)))
                (image (and (file-readable-p file)
                            (create-image file 'png nil
                                          :ascent (bongo-cat-mode--ascent)
@@ -237,9 +273,9 @@ aligned so its line sits on the same track baseline as the cat."
           (push (cons key image) bongo-cat-mode--rail-cache)
           image)))))
 
-(defun bongo-cat-mode--create-image (index &optional variant)
-  "Create image spec for frame INDEX and VARIANT."
-  (let ((file (bongo-cat-mode--image-path index variant))
+(defun bongo-cat-mode--create-image (index &optional variant scheme)
+  "Create image spec for frame INDEX, VARIANT, and SCHEME."
+  (let ((file (bongo-cat-mode--image-path index variant scheme))
         (ascent (if (eq variant 'flat)
                     (bongo-cat-mode--ascent)
                   'center)))
@@ -249,31 +285,40 @@ aligned so its line sits on the same track baseline as the cat."
                     :ascent ascent
                     :height bongo-cat-height))))
 
-(defun bongo-cat-mode--images (&optional variant)
-  "Return cached vector of Bongo Cat images for VARIANT."
+(defun bongo-cat-mode--images (&optional variant scheme)
+  "Return cached vector of Bongo Cat images for VARIANT and SCHEME."
   (when (bongo-cat-mode--image-supported-p)
     (let* ((variant (or variant 'angled))
-           (key (list bongo-cat-color-scheme bongo-cat-height variant))
+           (scheme (or scheme (bongo-cat-mode--effective-color-scheme)))
+           (key (list scheme bongo-cat-height variant))
            (cached (assoc key bongo-cat-mode--image-cache)))
       (if cached
           (cdr cached)
         (let ((images (vconcat (mapcar (lambda (i)
-                                         (bongo-cat-mode--create-image i variant))
+                                         (bongo-cat-mode--create-image i variant scheme))
                                        '(0 1 2)))))
           (push (cons key images) bongo-cat-mode--image-cache)
           images)))))
 
+(defun bongo-cat-mode--typing-window-p ()
+  "Return non-nil when the selected window is the typing window."
+  (and bongo-cat-mode--typing-p
+       (window-live-p bongo-cat-mode--typing-window)
+       (eq bongo-cat-mode--typing-window (selected-window))))
+
 (defun bongo-cat-mode--current-frame ()
-  "Return current Bongo Cat frame index."
-  (if bongo-cat-mode--typing-p
+  "Return the current Bongo Cat frame index for this mode-line."
+  (if (and (bongo-cat-mode--typing-window-p)
+           (bongo-cat-mode--mode-line-window-selected-p))
       bongo-cat-mode--frame-index
     0))
 
 (defun bongo-cat-mode--display-string (&optional variant)
   "Return the image for the current Bongo Cat frame and VARIANT."
-  (let* ((index (bongo-cat-mode--current-frame))
+  (let* ((scheme (bongo-cat-mode--effective-color-scheme))
+         (index (bongo-cat-mode--current-frame))
          (image (and (bongo-cat-mode--image-supported-p)
-                     (aref (bongo-cat-mode--images variant) index))))
+                     (aref (bongo-cat-mode--images variant scheme) index))))
     (if image
         (propertize " " 'display image)
       "")))
@@ -293,12 +338,18 @@ aligned so its line sits on the same track baseline as the cat."
   "Return non-nil when TIMER is live."
   (and (timerp timer) timer))
 
+(defun bongo-cat-mode--update-typing-window ()
+  "Schedule redisplay for the Bongo Cat typing window."
+  (if (window-live-p bongo-cat-mode--typing-window)
+      (force-window-update bongo-cat-mode--typing-window)
+    (bongo-cat-mode--become-idle)))
+
 (defun bongo-cat-mode--tick ()
   "Advance Bongo Cat's typing animation."
   (when bongo-cat-mode--typing-p
     (setq bongo-cat-mode--frame-index
           (if (= bongo-cat-mode--frame-index 1) 2 1))
-    (force-mode-line-update t)))
+    (bongo-cat-mode--update-typing-window)))
 
 (defun bongo-cat-mode--start-animation ()
   "Start Bongo Cat's animation timer."
@@ -313,30 +364,43 @@ aligned so its line sits on the same track baseline as the cat."
     (cancel-timer bongo-cat-mode--animation-timer)
     (setq bongo-cat-mode--animation-timer nil)))
 
+(defun bongo-cat-mode--cancel-idle-timer ()
+  "Cancel Bongo Cat's idle timer."
+  (when (bongo-cat-mode--timer-live-p bongo-cat-mode--idle-timer)
+    (cancel-timer bongo-cat-mode--idle-timer))
+  (setq bongo-cat-mode--idle-timer nil))
+
 (defun bongo-cat-mode--become-idle ()
   "Return Bongo Cat to its idle state."
-  (setq bongo-cat-mode--typing-p nil
-        bongo-cat-mode--frame-index 0
-        bongo-cat-mode--idle-timer nil)
-  (bongo-cat-mode--stop-animation)
-  (force-mode-line-update t))
+  (let ((window bongo-cat-mode--typing-window))
+    (bongo-cat-mode--cancel-idle-timer)
+    (setq bongo-cat-mode--typing-p nil
+          bongo-cat-mode--typing-window nil
+          bongo-cat-mode--frame-index 0)
+    (bongo-cat-mode--stop-animation)
+    (when (window-live-p window)
+      (force-window-update window))))
 
 (defun bongo-cat-mode--schedule-idle ()
   "Schedule Bongo Cat's return to the idle frame."
-  (when (bongo-cat-mode--timer-live-p bongo-cat-mode--idle-timer)
-    (cancel-timer bongo-cat-mode--idle-timer))
+  (bongo-cat-mode--cancel-idle-timer)
   (setq bongo-cat-mode--idle-timer
         (run-at-time bongo-cat-idle-timeout nil
                      #'bongo-cat-mode--become-idle)))
 
 (defun bongo-cat-mode--post-self-insert ()
-  "Animate Bongo Cat after a self-insert command."
-  (setq bongo-cat-mode--typing-p t)
-  (when (zerop bongo-cat-mode--frame-index)
-    (setq bongo-cat-mode--frame-index 1))
-  (bongo-cat-mode--start-animation)
-  (bongo-cat-mode--schedule-idle)
-  (force-mode-line-update t))
+  "Animate Bongo Cat in the window receiving a self-insert command."
+  (let ((previous-window bongo-cat-mode--typing-window))
+    (setq bongo-cat-mode--typing-p t
+          bongo-cat-mode--typing-window (selected-window))
+    (when (zerop bongo-cat-mode--frame-index)
+      (setq bongo-cat-mode--frame-index 1))
+    (when (and (window-live-p previous-window)
+               (not (eq previous-window bongo-cat-mode--typing-window)))
+      (force-window-update previous-window))
+    (bongo-cat-mode--start-animation)
+    (bongo-cat-mode--schedule-idle)
+    (bongo-cat-mode--update-typing-window)))
 
 ;;;; Mode-line plumbing
 
@@ -377,9 +441,7 @@ aligned so its line sits on the same track baseline as the cat."
                   #'bongo-cat-mode--post-self-insert))
     (bongo-cat-mode--uninstall-mode-line bongo-cat-mode--mode-line-form)
     (bongo-cat-mode--maybe-remove-hook)
-    (when (bongo-cat-mode--timer-live-p bongo-cat-mode--idle-timer)
-      (cancel-timer bongo-cat-mode--idle-timer)
-      (setq bongo-cat-mode--idle-timer nil))
+    (bongo-cat-mode--cancel-idle-timer)
     (bongo-cat-mode--become-idle))
   (force-mode-line-update t))
 
@@ -410,13 +472,13 @@ tracks scrolling (viewport) rather than the cursor."
      (t (min 1.0 (max 0.0 (/ (float (- top min))
                              (float denom))))))))
 
-(defun bongo-cat-scroll-mode--rail (length kind)
-  "Return a rail segment LENGTH cells long for KIND (`solid' or `faint').
-Uses matching line-tile images when available, otherwise falls back to
-box-drawing characters."
+(defun bongo-cat-scroll-mode--rail (length kind &optional scheme)
+  "Return a rail segment LENGTH cells long for KIND using SCHEME.
+KIND is `solid' or `faint'.  Uses matching line-tile images when available,
+otherwise falls back to box-drawing characters."
   (if (<= length 0)
       ""
-    (let ((image (bongo-cat-mode--rail-image kind)))
+    (let ((image (bongo-cat-mode--rail-image kind scheme)))
       (if image
           ;; Each cell needs its own (non-`eq') display spec, otherwise
           ;; Emacs renders one image for the whole run of identical cells
@@ -438,11 +500,12 @@ box-drawing characters."
   "Return a flat Bongo Cat that slides along a scroll track."
   (if (< (window-width) bongo-cat-minimum-window-width)
       ""
-    (let* ((width (max 1 bongo-cat-track-width))
+    (let* ((scheme (bongo-cat-mode--effective-color-scheme))
+           (width (max 1 bongo-cat-track-width))
            (progress (bongo-cat-scroll-mode--progress))
            (pos (round (* progress (1- width))))
-           (left (bongo-cat-scroll-mode--rail pos 'solid))
-           (right (bongo-cat-scroll-mode--rail (- width 1 pos) 'faint))
+           (left (bongo-cat-scroll-mode--rail pos 'solid scheme))
+           (right (bongo-cat-scroll-mode--rail (- width 1 pos) 'faint scheme))
            (cat (bongo-cat-mode--display-string 'flat)))
       (propertize (concat left cat right)
                   'help-echo "Bongo Cat slides as you scroll."))))
@@ -464,9 +527,7 @@ clamping at both ends.  It still animates its paws while you type."
     (bongo-cat-mode--uninstall-mode-line
      bongo-cat-scroll-mode--mode-line-form)
     (bongo-cat-mode--maybe-remove-hook)
-    (when (bongo-cat-mode--timer-live-p bongo-cat-mode--idle-timer)
-      (cancel-timer bongo-cat-mode--idle-timer)
-      (setq bongo-cat-mode--idle-timer nil))
+    (bongo-cat-mode--cancel-idle-timer)
     (bongo-cat-mode--become-idle))
   (force-mode-line-update t))
 
