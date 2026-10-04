@@ -212,6 +212,16 @@ expose `mode-line-window-selected-p'."
   "Return the frame used for mode-line face lookup."
   (window-frame (selected-window)))
 
+(defun bongo-cat-mode--color-dark-p (rgb frame)
+  "Return non-nil when RGB denotes a dark color on FRAME.
+RGB is a list of normalized (0.0-1.0) color components, or nil when the
+mode-line background color is unknown.  Uses `color-dark-p' when available
+and otherwise falls back to the `background-mode' frame parameter of FRAME."
+  (cond ((and rgb (fboundp 'color-dark-p))
+         (color-dark-p rgb))
+        (t
+         (eq (frame-parameter frame 'background-mode) 'dark))))
+
 (defun bongo-cat-mode--effective-color-scheme ()
   "Return the Bongo Cat scheme appropriate for the current mode-line."
   (if (not (eq bongo-cat-color-scheme 'auto))
@@ -222,11 +232,9 @@ expose `mode-line-window-selected-p'."
                    'mode-line-inactive))
            (background (face-background face frame 'default))
            (rgb (and background (color-values background))))
-      (if (if rgb
-              (color-dark-p (mapcar (lambda (component)
-                                      (/ component 65535.0))
-                                    rgb))
-            (eq (frame-parameter frame 'background-mode) 'dark))
+      (if (bongo-cat-mode--color-dark-p
+           (and rgb (mapcar (lambda (component) (/ component 65535.0)) rgb))
+           frame)
           'black
         'white))))
 
