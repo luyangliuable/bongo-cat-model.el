@@ -1,0 +1,7 @@
+# Files excluded from ELPA release tarballs (passed to tar -X).
+.github
+.github/*
+.gitignore
+Makefile
+test
+test/*
