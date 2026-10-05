@@ -68,9 +68,9 @@
     (setq bongo-cat-mode--image-cache nil))
   (when (boundp 'bongo-cat-mode--rail-cache)
     (setq bongo-cat-mode--rail-cache nil))
-  (when (fboundp 'clear-image-cache)
-    (ignore-errors
-      (clear-image-cache)))
+  (when (and (fboundp 'clear-image-cache)
+             (display-images-p))
+    (clear-image-cache))
   (force-mode-line-update t))
 
 (defcustom bongo-cat-height 28
